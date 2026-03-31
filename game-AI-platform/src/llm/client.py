@@ -199,7 +199,7 @@ def _chat_multi_anthropic(system: str, messages: list[dict[str, str]], *,
 
 
 def _parse_json(raw: str) -> Any:
-    """Extract JSON from an LLM response, tolerating markdown code fences and thinking tags."""
+    """Extract JSON from an LLM response, tolerating markdown fences, trailing commas, etc."""
     import re
     text = raw.strip()
 
@@ -212,45 +212,63 @@ def _parse_json(raw: str) -> Any:
         lines = lines[1:]
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
-        text = "\n".join(lines)
+        text = "\n".join(lines).strip()
+    elif text.endswith("```"):
+        text = text[:-3].rstrip()
 
-    # First try strict parse
+    # Try strict parse first
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # Repair common LLM JSON mistakes:
-    # 1. Remove trailing commas before } or ]
+    # Remove trailing commas (the most common LLM JSON mistake)
     repaired = re.sub(r",\s*([}\]])", r"\1", text)
-    # 2. Remove JS-style comments
-    repaired = re.sub(r"//[^\n]*", "", repaired)
-    # 3. Fix unquoted keys (simple cases)
-    repaired = re.sub(r"(?<=[\{,])\s*(\w+)\s*:", r' "\1":', repaired)
-
     try:
         return json.loads(repaired)
     except json.JSONDecodeError:
         pass
 
-    # Last resort: extract first { ... } or [ ... ] block
+    # Extract the outermost { ... } block, preferring object over array
     for opener, closer in [("{", "}"), ("[", "]")]:
         start = text.find(opener)
         if start == -1:
             continue
+        # Walk through text respecting string literals
         depth = 0
+        in_string = False
+        escape = False
+        end = -1
         for i in range(start, len(text)):
-            if text[i] == opener:
+            ch = text[i]
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == opener:
                 depth += 1
-            elif text[i] == closer:
+            elif ch == closer:
                 depth -= 1
                 if depth == 0:
-                    candidate = text[start : i + 1]
-                    candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
-                    try:
-                        return json.loads(candidate)
-                    except json.JSONDecodeError:
-                        break
+                    end = i
+                    break
+        if end == -1:
+            continue
+        candidate = text[start : end + 1]
+        # Remove trailing commas in the extracted block
+        candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
 
-    # Give up — raise with original text for debugging
+    # Log and raise — this helps debug what the LLM actually produced
+    log.error("Failed to parse JSON from LLM response (%d chars): %.500s", len(text), text)
     return json.loads(text)

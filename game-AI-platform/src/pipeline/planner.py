@@ -43,6 +43,12 @@ def plan(analysis: GameAnalysis) -> GamePlan:
     system, user = prompts.plan(analysis)
     data = client.chat_json(system, user, max_tokens=config.LLM_PLAN_MAX_TOKENS)
 
+    # LLM may wrap response in an array — unwrap if needed
+    if isinstance(data, list):
+        data = next((item for item in data if isinstance(item, dict)), data[0] if data else {})
+    if not isinstance(data, dict):
+        data = {}
+
     game_plan = GamePlan(**data)
 
     # Ensure required files are present

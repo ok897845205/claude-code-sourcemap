@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
+
+# Game platform runtime data
+game-AI-platform/data/projects/
+game-AI-platform/logs/
+game-AI-platform/_poll.py
+game-AI-platform/_test_fences.py
+
+# Node
+node_modules/
+
+# Original tgz
+*.tgz
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE
+.vscode/
+*.swp
+*.swo
