@@ -5,6 +5,7 @@ Preview server — manages vite preview processes for built games.
 from __future__ import annotations
 
 import subprocess
+import sys
 import time
 import socket
 from pathlib import Path
@@ -13,6 +14,8 @@ from threading import Lock
 from src import logger
 
 log = logger.get("server.preview")
+
+IS_WIN = sys.platform == "win32"
 
 _lock = Lock()
 _processes: dict[str, subprocess.Popen] = {}
@@ -49,7 +52,7 @@ def start(project_id: str, project_dir: Path) -> int:
             ["npm", "run", "preview", "--", "--port", str(port), "--host"],
             cwd=str(project_dir),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            shell=(subprocess.sys.platform == "win32"),
+            shell=IS_WIN,
         )
         _processes[project_id] = proc
         _ports[project_id] = port

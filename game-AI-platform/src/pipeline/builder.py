@@ -6,14 +6,20 @@ Runs npm install + npm run build + architecture validation + runtime tests.
 from __future__ import annotations
 
 import json
+import re
+import socket
 import subprocess
+import sys
 import time
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 
 from src import logger
 
 log = logger.get("pipeline.builder")
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+IS_WIN = sys.platform == "win32"
 
 
 @dataclass
@@ -39,9 +45,9 @@ class BuildResult:
     def errors(self) -> list[str]:
         errs = []
         if not self.install_ok:
-            errs.append(f"npm install failed:\n{self.install_log[-500:]}")
+            errs.append(f"npm install failed:\n{_ANSI_RE.sub('', self.install_log[-500:])}")
         if not self.build_ok:
-            errs.append(f"vite build failed:\n{self.build_log[-500:]}")
+            errs.append(f"vite build failed:\n{_ANSI_RE.sub('', self.build_log[-500:])}")
         if not self.arch_ok:
             violations = self.arch_report.get("violations", [])
             errs.extend(violations[:10])
@@ -53,15 +59,14 @@ class BuildResult:
 
 def _run(cmd: list[str], cwd: Path, timeout: int = 120) -> tuple[int, str, str]:
     """Run a subprocess and return (returncode, stdout, stderr)."""
-    is_win = subprocess.sys.platform == "win32"
     # On Windows, join into a single string so cmd.exe properly pipes output
-    run_cmd = " ".join(cmd) if is_win else cmd
+    run_cmd = " ".join(cmd) if IS_WIN else cmd
     log.debug("$ %s  (cwd=%s)", " ".join(cmd), cwd)
     try:
         result = subprocess.run(
             run_cmd, cwd=str(cwd),
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=timeout, shell=is_win,
+            timeout=timeout, shell=IS_WIN,
         )
         out = result.stdout or ""
         err = result.stderr or ""
@@ -137,7 +142,6 @@ def build(project_dir: Path) -> BuildResult:
 
 def _wait_for_port(port: int, timeout: float = 10.0) -> bool:
     """Poll until a TCP port is accepting connections."""
-    import socket
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
@@ -157,7 +161,7 @@ def _run_runtime_test(project_dir: Path) -> tuple[bool, dict]:
         ["npm", "run", "preview"],
         cwd=str(project_dir),
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        shell=(subprocess.sys.platform == "win32"),
+        shell=IS_WIN,
     )
 
     try:

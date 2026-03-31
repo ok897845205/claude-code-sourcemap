@@ -6,12 +6,14 @@ Supports up to N retry rounds.
 
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 
 from src import logger, config
 from src.llm import client, prompts
 from src.models import GameAnalysis, GeneratedFile
+from src.pipeline._text import strip_fences
 
 log = logger.get("pipeline.fixer")
 
@@ -54,7 +56,7 @@ def fix_files(
         system, user = prompts.fix(rel_path, current_code, relevant_errors,
                                    project_files=all_project_files)
         new_code = client.chat(system, user, max_tokens=config.LLM_CODE_MAX_TOKENS)
-        new_code = _strip_fences(new_code)
+        new_code = strip_fences(new_code)
 
         # Write back
         file_path.write_text(new_code, encoding="utf-8")
@@ -68,7 +70,6 @@ def fix_files(
 
 def _identify_files(src_dir: Path, errors: list[str]) -> list[str]:
     """Extract file paths mentioned in error messages."""
-    import re
     candidates: set[str] = set()
     for err in errors:
         # Match patterns like "entities/Player.js:42" or "src/scenes/GameScene.js"
@@ -106,14 +107,3 @@ def _identify_files(src_dir: Path, errors: list[str]) -> list[str]:
 def _is_general_error(err: str) -> bool:
     """Check if an error is general (not file-specific)."""
     return ".js" not in err
-
-
-def _strip_fences(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = lines[1:]
-        text = "\n".join(lines).strip()
-    if text.endswith("```"):
-        text = text[:-3].rstrip()
-    return text

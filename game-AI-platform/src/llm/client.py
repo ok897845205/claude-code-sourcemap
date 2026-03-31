@@ -9,6 +9,7 @@ Routing logic:
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Any
 
@@ -200,7 +201,6 @@ def _chat_multi_anthropic(system: str, messages: list[dict[str, str]], *,
 
 def _parse_json(raw: str) -> Any:
     """Extract JSON from an LLM response, tolerating markdown fences, trailing commas, etc."""
-    import re
     text = raw.strip()
 
     # Strip <think>...</think> blocks (some models emit internal reasoning)
@@ -268,6 +268,10 @@ def _parse_json(raw: str) -> Any:
             return json.loads(candidate)
         except json.JSONDecodeError:
             continue
+
+    # All parsing strategies failed
+    log.error("Failed to parse JSON from LLM response (%d chars): %.200s…", len(raw), raw)
+    raise ValueError(f"Could not extract valid JSON from LLM response ({len(raw)} chars)")
 
     # Log and raise — this helps debug what the LLM actually produced
     log.error("Failed to parse JSON from LLM response (%d chars): %.500s", len(text), text)

@@ -6,7 +6,7 @@ Supports parallel generation controlled by LLM_PARALLEL_FILES.
 
 from __future__ import annotations
 
-import asyncio
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable
@@ -16,6 +16,7 @@ from src.llm import client, prompts
 from src.models import (
     EngineType, GameAnalysis, GamePlan, GeneratedFile,
 )
+from src.pipeline._text import strip_fences
 
 log = logger.get("pipeline.code_gen")
 
@@ -40,7 +41,7 @@ def generate_file(
         system, user = prompts.codegen(engine, file_path, purpose, analysis, plan)
 
     code = client.chat(system, user, max_tokens=config.LLM_CODE_MAX_TOKENS)
-    code = _strip_fences(code)
+    code = strip_fences(code)
 
     # Post-process: ensure GameSprites.js has a default export
     if file_path == "sprites/GameSprites.js":
@@ -96,23 +97,11 @@ def generate_all(
     return results
 
 
-def _strip_fences(text: str) -> str:
-    """Remove markdown code fences if the LLM wrapped the output."""
-    text = text.strip()
-    # Strip opening fence (```js / ```javascript / ```)
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = lines[1:]  # drop ```{lang} line
-        text = "\n".join(lines).strip()
-    # Strip trailing fence
-    if text.endswith("```"):
-        text = text[:-3].rstrip()
-    return text
+
 
 
 def _ensure_default_export(code: str) -> str:
     """Ensure GameSprites.js has a default export aggregating all named exports."""
-    import re
     if "export default" in code:
         return code
     # Find all named exports: export const FOO = ...
@@ -132,7 +121,6 @@ def _ensure_named_exports_constants(code: str) -> str:
     If the LLM generates: const Constants = { ... }; export default Constants;
     we convert it to: export const CANVAS_WIDTH = ...; export const ... = ...;
     """
-    import re
 
     # If already using named exports, nothing to do
     if re.search(r"export\s+const\s+\w+\s*=", code):
