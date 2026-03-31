@@ -1,0 +1,7 @@
+[
+  { "type": "keydown", "key": "ArrowRight", "wait": 300, "description": "move right" },
+  { "type": "keydown", "key": "ArrowLeft", "wait": 300, "description": "move left" },
+  { "type": "keydown", "key": "ArrowUp", "wait": 500, "description": "jump" },
+  { "type": "hold", "key": "ArrowRight", "duration": 500, "wait": 200, "description": "run right" },
+  { "type": "keydown", "key": "Space", "wait": 200, "description": "action" }
+]
